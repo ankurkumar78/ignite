@@ -58,7 +58,7 @@ public class VisorExceptionWrapper extends Throwable {
 
         Throwable[] suppressed = cause.getSuppressed();
 
-        if (F.isEmpty(suppressed)) {
+        if (!F.isEmpty(suppressed)) {
             for (Throwable sup : suppressed)
                 addSuppressed(new VisorExceptionWrapper(sup));
         }
