@@ -1153,10 +1153,14 @@ public class GridIoManager extends GridManagerAdapter<CommunicationSpi<Serializa
             pools.poolForPolicy(plc).execute(c);
         }
         catch (RejectedExecutionException e) {
-            U.error(log, "Failed to process regular message due to execution rejection. Will attempt to process " +
-                "message in the listener thread instead.", e);
+            if (!ctx.isStopping()) {
+                U.error(log, "Failed to process regular message due to execution rejection. Will attempt to process " +
+                        "message in the listener thread instead.", e);
 
-            c.run();
+                c.run();
+            }
+            else if (log.isDebugEnabled())
+                log.debug("Failed to process regular message due to execution rejection: " + msg);
         }
     }
 
@@ -2286,7 +2290,7 @@ public class GridIoManager extends GridManagerAdapter<CommunicationSpi<Serializa
     }
 
     /**
-     * Dumps SPI stats to logs in case TcpCommunicationSpi is used, no-op otherwise.
+     * Dumps SPI stats to diagnostic logs in case TcpCommunicationSpi is used, no-op otherwise.
      */
     public void dumpStats() {
         CommunicationSpi spi = getSpi();

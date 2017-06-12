@@ -17,15 +17,17 @@
 
 package org.apache.ignite.internal.processors.odbc.jdbc;
 
-import org.apache.ignite.IgniteCache;
 import org.apache.ignite.IgniteLogger;
+import org.apache.ignite.cache.query.FieldsQueryCursor;
 import org.apache.ignite.cache.query.SqlFieldsQuery;
 import org.apache.ignite.internal.GridKernalContext;
 import org.apache.ignite.internal.processors.cache.QueryCursorImpl;
 import org.apache.ignite.internal.processors.odbc.SqlListenerRequest;
 import org.apache.ignite.internal.processors.odbc.SqlListenerRequestHandler;
 import org.apache.ignite.internal.processors.odbc.SqlListenerResponse;
+import org.apache.ignite.internal.processors.query.QueryUtils;
 import org.apache.ignite.internal.util.GridSpinBusyLock;
+import org.apache.ignite.internal.util.typedef.F;
 import org.apache.ignite.internal.util.typedef.internal.S;
 import org.apache.ignite.internal.util.typedef.internal.U;
 
@@ -66,6 +68,15 @@ public class JdbcRequestHandler implements SqlListenerRequestHandler {
     /** Enforce join order flag. */
     private final boolean enforceJoinOrder;
 
+    /** Collocated flag. */
+    private final boolean collocated;
+
+    /** Replicated only flag. */
+    private final boolean replicatedOnly;
+
+    /** Automatic close of cursors. */
+    private final boolean autoCloseCursors;
+
     /**
      * Constructor.
      *
@@ -74,14 +85,21 @@ public class JdbcRequestHandler implements SqlListenerRequestHandler {
      * @param maxCursors Maximum allowed cursors.
      * @param distributedJoins Distributed joins flag.
      * @param enforceJoinOrder Enforce join order flag.
+     * @param collocated Collocated flag.
+     * @param replicatedOnly Replicated only flag.
+     * @param autoCloseCursors Flag to automatically close server cursors.
      */
     public JdbcRequestHandler(GridKernalContext ctx, GridSpinBusyLock busyLock, int maxCursors,
-        boolean distributedJoins, boolean enforceJoinOrder) {
+        boolean distributedJoins, boolean enforceJoinOrder, boolean collocated, boolean replicatedOnly, 
+        boolean autoCloseCursors) {
         this.ctx = ctx;
         this.busyLock = busyLock;
         this.maxCursors = maxCursors;
         this.distributedJoins = distributedJoins;
         this.enforceJoinOrder = enforceJoinOrder;
+        this.collocated = collocated;
+        this.replicatedOnly = replicatedOnly;
+        this.autoCloseCursors = autoCloseCursors;
 
         log = ctx.log(getClass());
     }
@@ -151,6 +169,8 @@ public class JdbcRequestHandler implements SqlListenerRequestHandler {
 
             qry.setDistributedJoins(distributedJoins);
             qry.setEnforceJoinOrder(enforceJoinOrder);
+            qry.setCollocated(collocated);
+            qry.setReplicatedOnly(replicatedOnly);
 
             if (req.pageSize() <= 0)
                 return new JdbcResponse(SqlListenerResponse.STATUS_FAILED,
@@ -158,22 +178,16 @@ public class JdbcRequestHandler implements SqlListenerRequestHandler {
 
             qry.setPageSize(req.pageSize());
 
-            IgniteCache<Object, Object> cache0 = ctx.grid().cache(req.schemaName());
+            String schemaName = req.schemaName();
 
-            if (cache0 == null)
-                return new JdbcResponse(SqlListenerResponse.STATUS_FAILED,
-                    "Cache doesn't exist (did you configure it?): " + req.schemaName());
+            if (F.isEmpty(schemaName))
+                schemaName = QueryUtils.DFLT_SCHEMA;
 
-            IgniteCache<Object, Object> cache = cache0.withKeepBinary();
+            qry.setSchema(schemaName);
 
-            if (cache == null)
-                return new JdbcResponse(SqlListenerResponse.STATUS_FAILED,
-                    "Can not get cache with keep binary: " + req.schemaName());
+            FieldsQueryCursor<List<?>> qryCur = ctx.query().querySqlFieldsNoCache(qry, true);
 
-            JdbcQueryCursor cur = new JdbcQueryCursor(
-                qryId, req.pageSize(), req.maxRows(), (QueryCursorImpl)cache.query(qry));
-
-            qryCursors.put(qryId, cur);
+            JdbcQueryCursor cur = new JdbcQueryCursor(qryId, req.pageSize(), req.maxRows(), (QueryCursorImpl)qryCur);
 
             JdbcQueryExecuteResult res;
 
@@ -189,6 +203,11 @@ public class JdbcRequestHandler implements SqlListenerRequestHandler {
 
                 res = new JdbcQueryExecuteResult(qryId, (Long)items.get(0).get(0));
             }
+
+            if (res.last() && (!res.isQuery() || autoCloseCursors))
+                cur.close();
+            else
+                qryCursors.put(qryId, cur);
 
             return new JdbcResponse(res);
         }
@@ -249,6 +268,12 @@ public class JdbcRequestHandler implements SqlListenerRequestHandler {
             cur.pageSize(req.pageSize());
 
             JdbcQueryFetchResult res = new JdbcQueryFetchResult(cur.fetchRows(), !cur.hasNext());
+
+            if (res.last() && (!cur.isQuery() || autoCloseCursors)) {
+                qryCursors.remove(req.queryId());
+
+                cur.close();
+            }
 
             return new JdbcResponse(res);
         }

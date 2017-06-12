@@ -419,6 +419,7 @@ public class IgniteConfiguration {
     private ConnectorConfiguration connectorCfg = new ConnectorConfiguration();
 
     /** ODBC configuration. */
+    @Deprecated
     private OdbcConfiguration odbcCfg;
 
     /** Warmup closure. Will be invoked before actual grid start. */
@@ -462,6 +463,9 @@ public class IgniteConfiguration {
 
     /** */
     private long longQryWarnTimeout = DFLT_LONG_QRY_WARN_TIMEOUT;
+
+    /** SQL connector configuration. */
+    private SqlConnectorConfiguration sqlConnCfg = new SqlConnectorConfiguration();
 
     /**
      * Creates valid grid configuration with all default values.
@@ -554,6 +558,7 @@ public class IgniteConfiguration {
         segResolvers = cfg.getSegmentationResolvers();
         sndRetryCnt = cfg.getNetworkSendRetryCount();
         sndRetryDelay = cfg.getNetworkSendRetryDelay();
+        sqlConnCfg = cfg.getSqlConnectorConfiguration();
         sslCtxFactory = cfg.getSslContextFactory();
         storeSesLsnrs = cfg.getCacheStoreSessionListenerFactories();
         stripedPoolSize = cfg.getStripedPoolSize();
@@ -1174,7 +1179,10 @@ public class IgniteConfiguration {
      * without deserialization will be used.
      *
      * @return Marshaller to use in grid.
+     * @deprecated Since 2.1. Some Ignite features will not work if non-null marshaller is set
+     *     (IgniteCache.withKeepBinary(), .NET, CPP, ODBC)
      */
+    @Deprecated
     public Marshaller getMarshaller() {
         return marsh;
     }
@@ -1185,7 +1193,10 @@ public class IgniteConfiguration {
      * @param marsh Marshaller to use within grid.
      * @see IgniteConfiguration#getMarshaller()
      * @return {@code this} for chaining.
+     * @deprecated Since 2.1. Some Ignite features will not work if non-null marshaller is set
+     *     (IgniteCache.withKeepBinary(), .NET, CPP, ODBC)
      */
+    @Deprecated
     public IgniteConfiguration setMarshaller(Marshaller marsh) {
         this.marsh = marsh;
 
@@ -2438,7 +2449,9 @@ public class IgniteConfiguration {
      * Gets configuration for ODBC.
      *
      * @return ODBC configuration.
+     * @deprecated Use {@link #getSqlConnectorConfiguration()} instead.
      */
+    @Deprecated
     public OdbcConfiguration getOdbcConfiguration() {
         return odbcCfg;
     }
@@ -2448,7 +2461,9 @@ public class IgniteConfiguration {
      *
      * @param odbcCfg ODBC configuration.
      * @return {@code this} for chaining.
+     * @deprecated Use {@link #setSqlConnectorConfiguration(SqlConnectorConfiguration)} instead.
      */
+    @Deprecated
     public IgniteConfiguration setOdbcConfiguration(OdbcConfiguration odbcCfg) {
         this.odbcCfg = odbcCfg;
 
@@ -2740,6 +2755,27 @@ public class IgniteConfiguration {
         this.longQryWarnTimeout = longQryWarnTimeout;
 
         return this;
+    }
+
+    /**
+     * Sets SQL connector configuration.
+     *
+     * @param sqlConnCfg SQL connector configuration.
+     * @return {@code this} for chaining.
+     */
+    public IgniteConfiguration setSqlConnectorConfiguration(SqlConnectorConfiguration sqlConnCfg) {
+        this.sqlConnCfg = sqlConnCfg;
+
+        return this;
+    }
+
+    /**
+     * Gets SQL connector configuration.
+     *
+     * @return SQL connector configuration.
+     */
+    public SqlConnectorConfiguration getSqlConnectorConfiguration() {
+        return sqlConnCfg;
     }
 
     /** {@inheritDoc} */
