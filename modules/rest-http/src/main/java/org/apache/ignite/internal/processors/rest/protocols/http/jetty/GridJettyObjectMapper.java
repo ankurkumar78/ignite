@@ -159,13 +159,8 @@ public class GridJettyObjectMapper extends ObjectMapper {
             if (!F.isEmpty(e.getSuppressed())) {
                 gen.writeArrayFieldStart("suppressed");
 
-                for (Throwable sup : e.getSuppressed()) {
-                    gen.writeStartObject();
-
-                    writeException(sup, gen);
-
-                    gen.writeEndObject();
-                }
+                for (Throwable sup : e.getSuppressed())
+                    gen.writeObject(sup);
 
                 gen.writeEndArray();
             }
